@@ -65,7 +65,6 @@ userSchema.pre('save', function () {
   }
 })
 userSchema.pre('findOneAndUpdate', function () {
-  console.log(this);
   if (this._update.password) {
     let salt = bcrypt.genSaltSync(10);
     this._update.password = bcrypt.hashSync(this._update.password, salt)
