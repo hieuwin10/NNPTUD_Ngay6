@@ -1,91 +1,138 @@
-# Tài liệu Hướng dẫn Test và Nghiệp vụ hệ thống NNPTUD-C3
+# Tài liệu Chi tiết Hệ thống & Hướng dẫn Full API (NNPTUD-C3)
 
-Hệ thống đã được cấu hình và đồng bộ hóa với MongoDB chạy trên Docker. Dưới đây là các tính năng nghiệp vụ đã được triển khai và cách thức kiểm tra qua Postman.
-
-## ⚙️ Cấu hình hệ thống
-- **CSDL**: MongoDB (Docker container: `nnptud-c3-mongodb`)
-- **Port**: 3000
-- **Database Name**: `NNPTUD-C3`
-- **Auth**: JWT authenticate via Cookies (`TOKEN_NNPTUD_C3`)
+Tài liệu này tổng hợp toàn bộ các thay đổi hệ thống và hướng dẫn chi tiết cách vận hành, kiểm tra toàn bộ các API hiện có trong dự án.
 
 ---
 
-## 📦 Nghiệp vụ Quản lý Kho hàng (Inventory)
+## 🛠 Những thay đổi và tính năng đã thực hiện
 
-### 1. Tự động khởi tạo kho
-Mỗi khi tạo mới một Product, hệ thống sẽ tự động tạo một bản ghi Inventory tương ứng.
-- **Endpoint**: `POST /api/v1/products`
-- **Logic**: Sử dụng hook sau khi lưu sản phẩm để tạo bản ghi kho khởi tạo với `stock: 0`, `reserved: 0`, `soldCount: 0`.
-
-### 2. Danh sách kho hàng (Join Product)
-- **Endpoint**: `GET /api/v1/inventories`
-- **Tính năng**: Sử dụng `.populate('product')` để hiển thị đầy đủ tên, giá và thông tin sản phẩm đi kèm với số lượng kho.
-
----
-
-## 🧪 Hướng dẫn thực hiện Test trên Postman
-
-### Step 1: Đăng nhập (Lấy quyền)
-- **URL**: `POST /api/v1/auth/login`
-- **Body**:
-  ```json
-  {
-      "username": "admin",
-      "password": "admin123"
-  }
-  ```
-- **Kết quả**: Server trả về Token và thiết lập Cookie.
-
-### Step 2: Nhập hàng (Add Stock)
-- **URL**: `POST /api/v1/inventories/add-stock`
-- **Body**:
-  ```json
-  {
-      "product": "ID_SAN_PHAM",
-      "quantity": 100
-  }
-  ```
-- **Mô tả**: Tăng số lượng `stock` trong kho.
-
-### Step 3: Xuất kho trực tiếp (Remove Stock)
-- **URL**: `POST /api/v1/inventories/remove-stock`
-- **Body**:
-  ```json
-  {
-      "product": "ID_SAN_PHAM",
-      "quantity": 20
-  }
-  ```
-- **Mô tả**: Giảm số lượng `stock`. Hệ thống sẽ báo lỗi 400 nếu kho không đủ trừ.
-
-### Step 4: Đặt hàng / Giữ hàng (Reservation)
-- **URL**: `POST /api/v1/inventories/reservation`
-- **Body**:
-  ```json
-  {
-      "product": "ID_SAN_PHAM",
-      "quantity": 15
-  }
-  ```
-- **Mô tả**: Giảm `stock` và chuyển số lượng đó sang trạng thái `reserved` (giữ hàng).
-
-### Step 5: Hoàn tất bán lẻ (Sold)
-- **URL**: `POST /api/v1/inventories/sold`
-- **Body**:
-  ```json
-  {
-      "product": "ID_SAN_PHAM",
-      "quantity": 10
-  }
-  ```
-- **Mô tả**: Chuyển số lượng từ `reserved` sang `soldCount` sau khi khách đã thanh toán/nhận hàng.
+1.  **Đồng bộ CSDL (DB Syncing & Seeding)**:
+    *   Tự động hóa việc khởi tạo dữ liệu mẫu (`seed.js`) để đảm bảo hệ thống có sẵn các Role: `ADMIN`, `USER`.
+    *   Tạo tài khoản Admin mặc định: `admin` / `admin123`.
+    *   Sửa lỗi ID bị fix cứng trong logic Auth bằng cách đồng bộ đúng ID Role trong MongoDB.
+2.  **Hệ thống Quản lý Kho hàng (Inventory)**:
+    *   **Automation**: Tự động tạo bản ghi kho (`Inventory`) ngay khi tạo mới Sản phẩm (`Product`).
+    *   **Atomic Operations**: Sử dụng giải thuật cập nhật nguyên tử (`$inc`) để xử lý các vấn đề tranh chấp dữ liệu (Race Conditions) khi nhiều người cùng thao tác lên kho hàng.
+    *   **Logic Nghiệp vụ**: Triển khai đầy đủ các bước: Nhập hàng -> Giữ hàng (Reservation) -> Bán hàng (Sold) -> Giảm kho trực tiếp.
+3.  **Bảo mật & Phân quyền**:
+    *   Tích hợp JWT Authenticate qua Cookies.
+    *   Middleware `checkRole` để bảo vệ các API nhạy cảm (như xem danh sách Users).
 
 ---
 
-## 🛠️ Công nghệ sử dụng
-- **Node.js / Express**: Backend framework.
-- **Mongoose**: Tương tác với MongoDB.
-- **Atomic Operations**: Sử dụng `$inc` để đảm bảo dữ liệu không bị sai lệch khi có nhiều luồng xử lý cùng lúc (Concurrancy control).
-- **Validation**: Kiểm tra logic nghiệp vụ chặt chẽ (không cho phép tồn kho âm).
+## 🚀 Hướng dẫn Full API & Dữ liệu mẫu
 
-*Tài liệu này được tạo tự động để phục vụ việc kiểm tra và báo cáo tiến độ dự án.*
+### 1. Authentication (Xác thực)
+
+#### **Đăng nhập (Login)**
+*   **Method**: `POST`
+*   **URL**: `http://localhost:3000/api/v1/auth/login`
+*   **Body mẫu**:
+    ```json
+    {
+        "username": "admin",
+        "password": "admin123"
+    }
+    ```
+*   **Kết quả**: Trả về Token và set Cookie `TOKEN_NNPTUD_C3`.
+
+#### **Đăng ký (Register)**
+*   **Method**: `POST`
+*   **URL**: `http://localhost:3000/api/v1/auth/register`
+*   **Body mẫu**:
+    ```json
+    {
+        "username": "user_test_01",
+        "password": "password123",
+        "email": "test@example.com"
+    }
+    ```
+
+#### **Thông tin tài khoản hiện tại (Me)**
+*   **Method**: `GET`
+*   **URL**: `http://localhost:3000/api/v1/auth/me`
+*   *Yêu cầu*: Đã đăng nhập.
+
+---
+
+### 2. Quản lý Sản phẩm (Products)
+
+#### **Lấy danh sách sản phẩm**
+*   **Method**: `GET`
+*   **URL**: `http://localhost:3000/api/v1/products`
+*   **Query params**: `?minprice=100&maxprice=5000&title=phone`
+
+#### **Thêm sản phẩm mới (Kèm tạo kho hàng tự động)**
+*   **Method**: `POST`
+*   **URL**: `http://localhost:3000/api/v1/products`
+*   **Body mẫu**:
+    ```json
+    {
+        "title": "Samsung Galaxy S24",
+        "price": 900,
+        "description": "Flagship mới nhất của Samsung",
+        "category": "69b8f51e3944ed86c8624ea5",
+        "images": ["https://example.com/s24.jpg"]
+    }
+    ```
+
+---
+
+### 3. Quản lý Kho hàng (Inventory) - Chuyên sâu
+
+#### **Lấy toàn bộ trạng thái kho (Join Product)**
+*   **Method**: `GET`
+*   **URL**: `http://localhost:3000/api/v1/inventories`
+*   **Kết quả**: Hiển thị `stock`, `reserved`, `soldCount` và thông tin sản phẩm.
+
+#### **Nhập hàng (Add Stock)**
+*   **Method**: `POST`
+*   **URL**: `http://localhost:3000/api/v1/inventories/add-stock`
+*   **Body mẫu**:
+    ```json
+    {
+        "product": "ID_SAN_PHAM",
+        "quantity": 50
+    }
+    ```
+
+#### **Đặt hàng / Giữ hàng (Reservation)**
+*   **Method**: `POST`
+*   **URL**: `http://localhost:3000/api/v1/inventories/reservation`
+*   **Logic**: `stock` giảm, `reserved` tăng.
+*   **Body mẫu**:
+    ```json
+    {
+        "product": "ID_SAN_PHAM",
+        "quantity": 5
+    }
+    ```
+
+#### **Hoàn tất bán hàng (Sold)**
+*   **Method**: `POST`
+*   **URL**: `http://localhost:3000/api/v1/inventories/sold`
+*   **Logic**: `reserved` giảm, `soldCount` tăng.
+*   **Body mẫu**:
+    ```json
+    {
+        "product": "ID_SAN_PHAM",
+        "quantity": 5
+    }
+    ```
+
+---
+
+### 4. Các API Quản trị khác
+
+*   **Danh mụ (Categories)**: `GET`, `POST`, `PUT`, `DELETE` tại `/api/v1/categories`.
+*   **Người dùng (Users)**: `GET /api/v1/users` (Yêu cầu quyền ADMIN).
+*   **Phân quyền (Roles)**: `GET /api/v1/roles` để xem các ID quyền trong hệ thống.
+
+---
+
+## 📌 Lưu ý khi vận hành
+1.  **Thứ tự test**: Nên Đăng nhập -> Tạo Category -> Tạo Product -> Thao tác Inventory.
+2.  **ID Sản phẩm**: Bạn cần lấy mã `_id` từ kết quả của lệnh tạo sản phẩm hoặc lệnh GET Products để đưa vào các lệnh điều chỉnh kho hàng.
+3.  **Lỗi 403**: Nếu gặp lỗi này, hãy kiểm tra xem bạn đã đăng nhập chưa và tài khoản có quyền `ADMIN` hay không.
+
+*Tài liệu này giúp bạn hiểu sâu hơn về luồng dữ liệu và cấu trúc của dự án.*
