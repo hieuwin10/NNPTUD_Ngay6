@@ -61,6 +61,17 @@ router.post('/', async function (req, res, next) {
     images: req.body.images
   });
   await newProduct.save();
+  
+  // Tự động tạo Inventory cho sản phẩm mới
+  let inventoryModel = require('../schemas/inventory');
+  let newInventory = new inventoryModel({
+    product: newProduct._id,
+    stock: 0,
+    reserved: 0,
+    soldCount: 0
+  });
+  await newInventory.save();
+
   res.send(newProduct)
 })
 router.put('/:id', async function (req, res, next) {
